@@ -1,0 +1,1 @@
+from .decorator import batch_query_decorator
