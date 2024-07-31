@@ -9,7 +9,7 @@ import requests
 from requests.adapters import HTTPAdapter, Retry
 import pandas as pd
 
-from biotree.utils.decorator import batch_query_decorator
+from biotree.utils.decorator import batch_query_decorator, input_handler_decorator
 
 logger = logging.getLogger("biotree.smiles_to_target.chembal")
 
@@ -140,7 +140,7 @@ def merge_xml_results(xml_results):
 
 def print_progress_batches(batch_index, size, total):
     n_fetched = min((batch_index + 1) * size, total)
-    print(f"Fetched: {n_fetched} / {total}")
+    # print(f"Fetched: {n_fetched} / {total}")
 
 
 def get_id_mapping_results_search(url):
@@ -213,6 +213,7 @@ def get_dataframe_from_ids(ids):
         return convert_results_to_dataframe(results_dict)
 
 
+@input_handler_decorator
 @batch_query_decorator
 def get_target_predictions(smiles):
     url = "https://www.ebi.ac.uk/chembl/target-predictions"

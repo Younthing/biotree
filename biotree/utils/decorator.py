@@ -1,5 +1,6 @@
 import logging
 import pandas as pd
+import os
 from functools import wraps
 from collections.abc import Iterable
 
@@ -7,7 +8,7 @@ from collections.abc import Iterable
 logger = logging.getLogger("biotree.utils.decorator")
 
 
-def batch_query_decorator(func):
+def input_handler_decorator(func):
     @wraps(func)
     def wrapper(smiles_input):
         # 检查输入是否为单个对象，如果是则转换为包含该对象的列表
@@ -17,8 +18,28 @@ def batch_query_decorator(func):
             smiles_iterable = [smiles_input]
             logger.info("Input is a single object, converted to a list.")
         else:
-            smiles_iterable = smiles_input
+            # 如果输入是文件路径，读取文件的第一列
+            if isinstance(smiles_input, str) and os.path.isfile(smiles_input):
+                try:
+                    with open(smiles_input, "r") as file:
+                        smiles_iterable = [line.split()[0] for line in file]
+                    logger.info("Input is a file path, read the first column.")
+                except Exception as e:
+                    logger.error(
+                        "Failed to read the file: %s. Error: %s", smiles_input, str(e)
+                    )
+                    raise e
+            else:
+                smiles_iterable = smiles_input
 
+        return func(smiles_iterable)
+
+    return wrapper
+
+
+def batch_query_decorator(func):
+    @wraps(func)
+    def wrapper(smiles_iterable):
         logger.info("Batch query started with %d SMILES.", len(smiles_iterable))
         results = []
         failed_smiles = []
