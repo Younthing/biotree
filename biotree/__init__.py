@@ -2,6 +2,14 @@ import logging
 import logging.config
 import os
 
+
+try:
+    from importlib.metadata import version as get_version
+
+    __version__ = get_version("biotree")
+except ImportError:
+    __version__ = ""
+
 # 确保日志目录存在
 log_dir = "./.log"
 os.makedirs(log_dir, exist_ok=True)
@@ -47,4 +55,3 @@ logging.config.dictConfig(LOGGING_CONFIG)
 
 # 在顶层模块中获取日志记录器
 logger = logging.getLogger("biotree")
-logger.info("Logging for biotree module")

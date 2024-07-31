@@ -3,15 +3,20 @@ name = "biotree"
 packages = [
     { include = "biotree" },
 ]
-version = "0.2.0"
+version = "0.2.3"
 description = ""
 authors = ["younthing <fanxingfu3344@gmail.com>"]
 readme = "README.md"
+
+
+[tool.poetry.scripts]
+biotree = "biotree.cli.main:app"
 
 [tool.poetry.dependencies]
 python = "^3.10"
 pandas = "^2.2.2"
 requests = "^2.32.3"
+typer = "^0.12.3"
 
 
 [tool.poetry.group.dev.dependencies]
