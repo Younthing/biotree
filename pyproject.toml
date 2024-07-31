@@ -3,7 +3,7 @@ name = "biotree"
 packages = [
     { include = "biotree" },
 ]
-version = "0.2.3"
+version = "0.2.4"
 description = ""
 authors = ["younthing <fanxingfu3344@gmail.com>"]
 readme = "README.md"
