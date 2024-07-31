@@ -1,4 +1,5 @@
 import pandas as pd
+import requests
 from api import submit_id_mapping, check_id_mapping_results_ready, get_id_mapping_results_link, get_id_mapping_results_search
 
 def convert_results_to_dataframe(results):
