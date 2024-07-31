@@ -1,6 +1,6 @@
 import logging
 import pandas as pd
-import os
+from pathlib import Path
 from functools import wraps
 from collections.abc import Iterable
 
@@ -11,26 +11,29 @@ logger = logging.getLogger("biotree.utils.decorator")
 def input_handler_decorator(func):
     @wraps(func)
     def wrapper(smiles_input):
-        # 检查输入是否为单个对象，如果是则转换为包含该对象的列表
-        if not isinstance(smiles_input, Iterable) or isinstance(
-            smiles_input, (str, bytes)
-        ):
-            smiles_iterable = [smiles_input]
-            logger.info("Input is a single object, converted to a list.")
-        else:
-            # 如果输入是文件路径，读取文件的第一列
-            if isinstance(smiles_input, str) and os.path.isfile(smiles_input):
+        smiles_iterable = []
+        if isinstance(smiles_input, (str, Path)):
+            # 处理字符串或Path对象
+            path = Path(smiles_input)
+            if path.is_file():
                 try:
-                    with open(smiles_input, "r") as file:
-                        smiles_iterable = [line.split()[0] for line in file]
-                    logger.info("Input is a file path, read the first column.")
-                except Exception as e:
-                    logger.error(
-                        "Failed to read the file: %s. Error: %s", smiles_input, str(e)
-                    )
-                    raise e
+                    with path.open("r", encoding="utf-8") as f:
+                        for line in f:
+                            line = line.strip()
+                            if line:
+                                smiles_iterable.append(line.split()[0])
+                    logger.info(f"Read {len(smiles_iterable)} SMILES from {path}")
+                except UnicodeDecodeError:
+                    logger.error(f"Failed to decode {path} with utf-8 encoding")
+                except OSError as e:
+                    logger.error(f"Failed to read {path}: {e}")
             else:
-                smiles_iterable = smiles_input
+                smiles_iterable.append(str(smiles_input))
+        elif isinstance(smiles_input, Iterable):
+            # 处理可迭代对象
+            smiles_iterable.extend(smiles_input)
+        else:
+            logger.warning(f"Unsupported input type: {type(smiles_input)}")
 
         return func(smiles_iterable)
 
