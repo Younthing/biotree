@@ -1,4 +1,5 @@
-from .chembal import add_gene_name_to_predictions as prediction
+"""
+Adds the gene name to the predictions made by the `chembal` module.
+"""
 
-# smiles_to_target/__init__.py
-from .chembal import original_function
+from .chembal import add_gene_name_to_predictions as prediction

@@ -1,3 +1,13 @@
+"""
+This module provides functionality for interacting with the UniProt and ChEMBL APIs 
+predict targets from SMILES strings and enhance these predictionswith gene names for Homo sapiens.
+Constants:
+    POLLING_INTERVAL: The interval (in seconds) to wait between polling attempts.
+    API_URL: The base URL for the UniProt API.
+    retries: A Retry object that defines the retry strategy for requests.
+    session: A requests.Session object with the retry strategy applied.
+"""
+
 import re
 import time
 import json
@@ -13,16 +23,9 @@ from biotree.utils.decorator import batch_query_decorator, input_handler_decorat
 
 logger = logging.getLogger("biotree.smiles_to_target.chembal")
 
-
-# smiles_to_target/chembal.py
-def original_function():
-    print("This is the original function.")
-
-
-## 官方API
+# Official API
 POLLING_INTERVAL = 3
 API_URL = "https://rest.uniprot.org"
-
 
 retries = Retry(total=5, backoff_factor=0.25, status_forcelist=[500, 502, 503, 504])
 session = requests.Session()
@@ -30,6 +33,14 @@ session.mount("https://", HTTPAdapter(max_retries=retries))
 
 
 def check_response(response):
+    """Check the response status and raise an HTTPError if the response contains an error.
+
+    Args:
+        response (requests.Response): The response object to check.
+
+    Raises:
+        requests.HTTPError: If the response status code is an error.
+    """
     try:
         response.raise_for_status()
     except requests.HTTPError:
@@ -38,6 +49,16 @@ def check_response(response):
 
 
 def submit_id_mapping(from_db, to_db, ids):
+    """Submit a job for ID mapping from one database to another.
+
+    Args:
+        from_db (str): The source database.
+        to_db (str): The target database.
+        ids (list of str): The list of IDs to map.
+
+    Returns:
+        str: The job ID for the submitted ID mapping job.
+    """
     request = requests.post(
         f"{API_URL}/idmapping/run",
         data={"from": from_db, "to": to_db, "ids": ",".join(ids)},
@@ -48,6 +69,14 @@ def submit_id_mapping(from_db, to_db, ids):
 
 
 def get_next_link(headers):
+    """Extract the next link from the response headers.
+
+    Args:
+        headers (dict): The response headers.
+
+    Returns:
+        str: The next link URL if it exists, otherwise None.
+    """
     re_next_link = re.compile(r'<(.+)>; rel="next"')
     if "Link" in headers:
         match = re_next_link.match(headers["Link"])
@@ -56,6 +85,17 @@ def get_next_link(headers):
 
 
 def check_id_mapping_results_ready(job_id):
+    """Check if the ID mapping results are ready.
+
+    Args:
+        job_id (str): The job ID to check.
+
+    Returns:
+        bool: True if the results are ready, False otherwise.
+
+    Raises:
+        Exception: If the job status is not RUNNING or completed.
+    """
     while True:
         request = session.get(f"{API_URL}/idmapping/status/{job_id}")
         check_response(request)
@@ -71,6 +111,16 @@ def check_id_mapping_results_ready(job_id):
 
 
 def get_batch(batch_response, file_format, compressed):
+    """Retrieve a batch of results from the response.
+
+    Args:
+        batch_response (requests.Response): The initial batch response.
+        file_format (str): The file format of the results.
+        compressed (bool): Whether the results are compressed.
+
+    Yields:
+        dict: The decoded batch results.
+    """
     batch_url = get_next_link(batch_response.headers)
     while batch_url:
         batch_response = session.get(batch_url)
@@ -80,6 +130,16 @@ def get_batch(batch_response, file_format, compressed):
 
 
 def combine_batches(all_results, batch_results, file_format):
+    """Combine batch results into a single result set.
+
+    Args:
+        all_results (dict): The combined results so far.
+        batch_results (dict): The current batch of results.
+        file_format (str): The file format of the results.
+
+    Returns:
+        dict: The combined results.
+    """
     if file_format == "json":
         for key in ("results", "failedIds"):
             if key in batch_results and batch_results[key]:
@@ -92,6 +152,14 @@ def combine_batches(all_results, batch_results, file_format):
 
 
 def get_id_mapping_results_link(job_id):
+    """Retrieve the results link for the given job ID.
+
+    Args:
+        job_id (str): The job ID to get the results link for.
+
+    Returns:
+        str: The results link URL.
+    """
     url = f"{API_URL}/idmapping/details/{job_id}"
     request = session.get(url)
     check_response(request)
@@ -99,6 +167,16 @@ def get_id_mapping_results_link(job_id):
 
 
 def decode_results(response, file_format, compressed):
+    """Decode the results from the response.
+
+    Args:
+        response (requests.Response): The response object.
+        file_format (str): The file format of the results.
+        compressed (bool): Whether the results are compressed.
+
+    Returns:
+        dict or list: The decoded results.
+    """
     if compressed:
         decompressed = zlib.decompress(response.content, 16 + zlib.MAX_WBITS)
         if file_format == "json":
@@ -124,11 +202,27 @@ def decode_results(response, file_format, compressed):
 
 
 def get_xml_namespace(element):
+    """Get the XML namespace from an element.
+
+    Args:
+        element (xml.etree.ElementTree.Element): The XML element.
+
+    Returns:
+        str: The namespace URI.
+    """
     m = re.match(r"\{(.*)\}", element.tag)
     return m.groups()[0] if m else ""
 
 
 def merge_xml_results(xml_results):
+    """Merge multiple XML results into a single XML document.
+
+    Args:
+        xml_results (list of str): The list of XML result strings.
+
+    Returns:
+        str: The merged XML document as a string.
+    """
     merged_root = ElementTree.fromstring(xml_results[0])
     for result in xml_results[1:]:
         root = ElementTree.fromstring(result)
@@ -139,11 +233,26 @@ def merge_xml_results(xml_results):
 
 
 def print_progress_batches(batch_index, size, total):
+    """Print the progress of fetching batches.
+
+    Args:
+        batch_index (int): The current batch index.
+        size (int): The size of each batch.
+        total (int): The total number of results.
+    """
     n_fetched = min((batch_index + 1) * size, total)
-    # print(f"Fetched: {n_fetched} / {total}")
+    print(f"Fetched: {n_fetched} / {total}")
 
 
 def get_id_mapping_results_search(url):
+    """Retrieve ID mapping results using search.
+
+    Args:
+        url (str): The URL to retrieve the results from.
+
+    Returns:
+        dict or str: The results in the specified format.
+    """
     parsed = urlparse(url)
     query = parse_qs(parsed.query)
     file_format = query["format"][0] if "format" in query else "json"
@@ -171,6 +280,14 @@ def get_id_mapping_results_search(url):
 
 
 def get_id_mapping_results_stream(url):
+    """Retrieve ID mapping results using streaming.
+
+    Args:
+        url (str): The URL to retrieve the results from.
+
+    Returns:
+        dict or list: The results in the specified format.
+    """
     if "/stream/" not in url:
         url = url.replace("/results/", "/results/stream/")
     request = session.get(url)
@@ -184,10 +301,15 @@ def get_id_mapping_results_stream(url):
     return decode_results(request, file_format, compressed)
 
 
-## 自己实现的 ######################################################################
-
-
 def convert_results_to_dataframe(results):
+    """Convert the results to a pandas DataFrame.
+
+    Args:
+        results (dict): The results to convert.
+
+    Returns:
+        pandas.DataFrame: The results as a DataFrame.
+    """
     rows = []
     for result in results["results"]:
         from_value = result["from"]
@@ -206,6 +328,14 @@ def convert_results_to_dataframe(results):
 
 
 def get_dataframe_from_ids(ids):
+    """Retrieve a DataFrame from a list of IDs.
+
+    Args:
+        ids (list of str): The list of IDs to retrieve data for.
+
+    Returns:
+        pandas.DataFrame: The data as a DataFrame.
+    """
     job_id = submit_id_mapping(from_db="ChEMBL", to_db="UniProtKB", ids=ids)
     if check_id_mapping_results_ready(job_id):
         link = get_id_mapping_results_link(job_id)
@@ -216,13 +346,21 @@ def get_dataframe_from_ids(ids):
 @input_handler_decorator
 @batch_query_decorator
 def get_target_predictions(smiles):
+    """Retrieve target predictions for a given SMILES string.
+
+    Args:
+        smiles (str): The SMILES string to get predictions for.
+
+    Returns:
+        pandas.DataFrame: The target predictions.
+    """
     url = "https://www.ebi.ac.uk/chembl/target-predictions"
     headers = {"Content-Type": "application/json"}
     payload = {"smiles": smiles}
 
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=600)
-        response.raise_for_status()  # 如果响应状态不是200，抛出HTTPError异常
+        response.raise_for_status()
 
         data = response.json()
         result_df = pd.DataFrame(data)
@@ -233,25 +371,25 @@ def get_target_predictions(smiles):
         return None
 
 
-## 合并
 def add_gene_name_to_predictions(smiles):
-    # 获取目标预测数据
+    """Add gene names to the target predictions for a given SMILES string.
+
+    Args:
+        smiles (str): The SMILES string to get predictions for.
+
+    Returns:
+        pandas.DataFrame: The target predictions with gene names.
+    """
     df_predictions = get_target_predictions(smiles)
-    # 只保留 organism 为 Homo sapiens 且 80% 列为 active 的行
     df_filtered = df_predictions[
         (df_predictions["organism"] == "Homo sapiens")
         & (df_predictions["80%"] == "active")
     ]
-    # 提取所有唯一的 target_chemblid
     unique_chembl_ids = df_filtered["target_chemblid"].unique().tolist()
 
-    # 获取基因名数据
     df_genes = get_dataframe_from_ids(unique_chembl_ids)
-
-    # 只保留必要的列以减少内存使用
     df_genes = df_genes[["chembal", "gene_name"]]
 
-    # 合并两个 DataFrame，按 chembal 和 target_chemblid 列进行合并
     df_merged = pd.merge(
         df_filtered,
         df_genes,
@@ -260,14 +398,13 @@ def add_gene_name_to_predictions(smiles):
         how="left",
     )
 
-    # 删除不需要的列
     df_merged = df_merged.drop(columns=["chembal"])
 
     return df_merged
 
 
 # if __name__ == "__main__":
-#     # 使用示例
+#     # Example usage
 #     smiles = "CC(C)C1=CC=C(C=C1)C(C)C(=O)O"
 #     result_df = add_gene_name_to_predictions(smiles)
 #     print(result_df)
